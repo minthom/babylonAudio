@@ -1,3 +1,5 @@
+const SomeMagicNumber = 140;
+
 document.addEventListener("DOMContentLoaded", () => {
     const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 
@@ -23,6 +25,8 @@ document.addEventListener("DOMContentLoaded", () => {
         engine.resize();
     });
 });
+
+let timeSlice = 0;
 
 class Playground {
     public static CreateScene(engine: BABYLON.Engine, canvas: HTMLCanvasElement): BABYLON.Scene {
@@ -91,11 +95,15 @@ class Playground {
             return scene;
         }
 
+        // Clear the canvas before drawing
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
         // Call the new visualization method in the render loop with parameters for flexibility
         scene.onAfterRenderObservable.add(() => {
             Playground.visualizeFreqData(ctx, analyzer, freqData, {
                 min: -60, // Minimum dB threshold for visualization
-                range: { minFreq: 50, maxFreq: 2000 }, // Frequency range to visualize
+                range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
                 barColor: "rgb(100, 50, 150)", // Color for bars
                 backgroundColor: "#000", // Background color
             });
@@ -121,10 +129,6 @@ class Playground {
         // Get updated frequency data
         analyzer.getFloatFrequencyData(freqData);
 
-        // Clear the canvas before drawing
-        ctx.fillStyle = backgroundColor;
-        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
         // Calculate the frequency bin range based on the sample rate and FFT size
         const nyquistFreq = analyzer.context.sampleRate / 2;
         const barWidth = ctx.canvas.width / freqData.length;
@@ -134,16 +138,25 @@ class Playground {
 
             // Only show frequencies within the specified range
             if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
-                continue;
+                //continue;
             }
 
             // Apply the minimum threshold to frequency data
-            const value = freqData[i] < min ? 0 : freqData[i];
+            const value = freqData[i]; // < min ? 0 : freqData[i];
 
-            const barHeight = (value + 140) * 2; // Adjust to make the bars visible
-            ctx.fillStyle = barColor;
-            ctx.fillRect(i * barWidth, ctx.canvas.height - barHeight, barWidth, barHeight);
+            // if (value > 0) {
+            //     console.log(`Frequency: ${frequencyIndex} Hz, Value: ${value} dB`);
+            // }
+            const barHeight = -value * 2; // Adjust to make the bars visible
+            //ctx.fillStyle = barColor;
+            //ctx.fillRect(i * barWidth, barHeight, barWidth, barHeight);
+
+            const color = `rgb(${(barHeight / 100) * 255}, 0, 0, 1)`;
+            ctx.fillStyle = color;
+            ctx.fillRect(timeSlice, ctx.canvas.height - i, 1, 1);
         }
+
+        timeSlice += 1;
     }
 }
 
