@@ -29,6 +29,8 @@ document.addEventListener("DOMContentLoaded", () => {
 let timeSlice = 0;
 
 class Playground {
+    private static audioContext: AudioContext;
+
     public static CreateScene(engine: BABYLON.Engine, canvas: HTMLCanvasElement): BABYLON.Scene {
         // Create a basic Babylon Scene object (non-mesh)
         const scene = new BABYLON.Scene(engine);
@@ -39,16 +41,16 @@ class Playground {
 
         // Get the Babylon.js audio engine, audio context, and master gain node
         const audioEngine = BABYLON.Engine.audioEngine!;
-        const audioContext = audioEngine.audioContext!;
+        Playground.audioContext = audioEngine.audioContext!;
         const masterGainNode = audioEngine.masterGain;
 
         // Add test tones. Left speaker gets a 440 Hz sine wave, right speaker gets a 660 Hz sine wave
-        const leftSound = new OscillatorNode(audioContext, { frequency: 440 });
-        const rightSound = new OscillatorNode(audioContext, { frequency: 660 });
+        const leftSound = new OscillatorNode(Playground.audioContext, { frequency: 440 });
+        const rightSound = new OscillatorNode(Playground.audioContext, { frequency: 660 });
 
         // Add panner nodes to position the sound sources to the left and right
-        const leftPanner = new StereoPannerNode(audioContext, { pan: -1 });
-        const rightPanner = new StereoPannerNode(audioContext, { pan: 1 });
+        const leftPanner = new StereoPannerNode(Playground.audioContext, { pan: -1 });
+        const rightPanner = new StereoPannerNode(Playground.audioContext, { pan: 1 });
 
         // Connect the left and right sound sources to the panner nodes
         leftSound.connect(leftPanner);
@@ -67,15 +69,15 @@ class Playground {
 
         // Toggle the audio engine lock on user interaction
         document.addEventListener("click", () => {
-            if (audioContext.state === "suspended") {
-                audioContext.resume().then(() => console.log("Audio context resumed"));
-            } else if (audioContext.state === "running") {
-                audioContext.suspend().then(() => console.log("Audio context suspended"));
+            if (Playground.audioContext.state === "suspended") {
+                Playground.audioContext.resume().then(() => console.log("Audio context resumed"));
+            } else if (Playground.audioContext.state === "running") {
+                Playground.audioContext.suspend().then(() => console.log("Audio context suspended"));
             }
         });
 
         // Add analyzer node and connect it to the end of the audio graph
-        const analyzer = new AnalyserNode(audioContext);
+        const analyzer = new AnalyserNode(Playground.audioContext);
         masterGainNode.connect(analyzer);
 
         const freqData = new Float32Array(analyzer.frequencyBinCount);
