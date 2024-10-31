@@ -128,51 +128,50 @@ class Playground {
     ): void {
         const { min, range, barColor, backgroundColor, timeout } = options;
 
-        // Delay the visualization by the specified timeout
-        setTimeout(() => {
-            console.log(`Visualization started after ${timeout / 1000} seconds`);
+        const nyquistFreq = analyzer.context.sampleRate / 2;
 
-            // Start rendering frequency data after the timeout
-            const nyquistFreq = analyzer.context.sampleRate / 2;
+        // Render loop to visualize frequency data
+        const renderFreqData = () => {
+            // Continue the animation
+            requestAnimationFrame(renderFreqData);
 
-            // Render loop to visualize frequency data
-            const renderFreqData = () => {
-                // Get updated frequency data
-                analyzer.getFloatFrequencyData(freqData);
+            const time = Playground.audioContext.currentTime * 1000;
+            if (time < timeout) {
+                return;
+            }
 
-                // Clear the canvas before drawing
-                ctx.fillStyle = backgroundColor;
-                ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            // Get updated frequency data
+            analyzer.getFloatFrequencyData(freqData);
 
-                // Dynamically calculate the bar width based on canvas size and data length
-                const barWidth = ctx.canvas.width / freqData.length;
+            // Clear the canvas before drawing
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-                for (let i = 0; i < freqData.length; i++) {
-                    const frequencyIndex = (i / freqData.length) * nyquistFreq;
+            // Dynamically calculate the bar width based on canvas size and data length
+            const barWidth = ctx.canvas.width / freqData.length;
 
-                    // Only show frequencies within the specified range
-                    if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
-                        continue;
-                    }
+            for (let i = 0; i < freqData.length; i++) {
+                const frequencyIndex = (i / freqData.length) * nyquistFreq;
 
-                    // Apply the minimum threshold to frequency data
-                    const value = freqData[i] < min ? 0 : freqData[i];
-
-                    // Calculate bar height (scale value for visualization)
-                    const barHeight = Math.max(0, -value * (ctx.canvas.height / 100)); // Scaling based on canvas height
-
-                    // Draw the bar at the calculated height
-                    ctx.fillStyle = barColor;
-                    ctx.fillRect(i * barWidth, ctx.canvas.height - barHeight, barWidth, barHeight); // Draw from the bottom up
+                // Only show frequencies within the specified range
+                if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
+                    continue;
                 }
 
-                // Continue the animation
-                requestAnimationFrame(renderFreqData);
-            };
+                // Apply the minimum threshold to frequency data
+                const value = freqData[i] < min ? 0 : freqData[i];
 
-            // Call the rendering function every frame
-            requestAnimationFrame(renderFreqData);
-        }, timeout); // Timeout specified in milliseconds
+                // Calculate bar height (scale value for visualization)
+                const barHeight = Math.max(0, -value * (ctx.canvas.height / 100)); // Scaling based on canvas height
+
+                // Draw the bar at the calculated height
+                ctx.fillStyle = barColor;
+                ctx.fillRect(i * barWidth, ctx.canvas.height - barHeight, barWidth, barHeight); // Draw from the bottom up
+            }
+        };
+
+        // Call the rendering function every frame
+        requestAnimationFrame(renderFreqData);
     }
 }
 
@@ -181,4 +180,3 @@ declare var dat: any;
 
 // Export the Playground class
 export { Playground };
-
