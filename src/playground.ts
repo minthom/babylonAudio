@@ -101,19 +101,21 @@ class Playground {
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-        // Call the new visualization method with a delay (e.g., 5000 ms = 5 seconds)
-        Playground.visualizeFreqData(ctx, analyzer, freqData, {
-            min: -60, // Minimum dB threshold for visualization
-            range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
-            barColor: "rgb(100, 50, 150)", // Color for bars
-            backgroundColor: "#000", // Background color
-            timeout: 5000, // Delay visualization by 5 seconds
+        // Call the new visualization method in the render loop with parameters for flexibility
+        scene.onAfterRenderObservable.add(() => {
+            Playground.visualizeFreqData(ctx, analyzer, freqData, {
+                min: -60, // Minimum dB threshold for visualization
+                range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
+                barColor: "rgb(100, 50, 150)", // Color for bars
+                backgroundColor: "#000", // Background color
+                timeout: 5000,
+            });
         });
 
         return scene;
     }
 
-    // Updated method to visualize frequency data with parameters for customization, including timeout
+    // Updated method to visualize frequency data with parameters for customization
     public static visualizeFreqData(
         ctx: CanvasRenderingContext2D,
         analyzer: AnalyserNode,
@@ -128,11 +130,11 @@ class Playground {
     ): void {
         const { min, range, barColor, backgroundColor, timeout } = options;
 
+        // Calculate the frequency bin range based on the sample rate and FFT size
         const nyquistFreq = analyzer.context.sampleRate / 2;
 
         // Render loop to visualize frequency data
         const renderFreqData = () => {
-            // Continue the animation
             requestAnimationFrame(renderFreqData);
 
             const time = Playground.audioContext.currentTime * 1000;
@@ -143,35 +145,31 @@ class Playground {
             // Get updated frequency data
             analyzer.getFloatFrequencyData(freqData);
 
-            // Clear the canvas before drawing
-            ctx.fillStyle = backgroundColor;
-            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-            // Dynamically calculate the bar width based on canvas size and data length
-            const barWidth = ctx.canvas.width / freqData.length;
-
             for (let i = 0; i < freqData.length; i++) {
                 const frequencyIndex = (i / freqData.length) * nyquistFreq;
 
                 // Only show frequencies within the specified range
                 if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
-                    continue;
+                    //continue;
                 }
 
                 // Apply the minimum threshold to frequency data
-                const value = freqData[i] < min ? 0 : freqData[i];
+                const value = freqData[i]; // < min ? 0 : freqData[i];
 
-                // Calculate bar height (scale value for visualization)
-                const barHeight = Math.max(0, -value * (ctx.canvas.height / 100)); // Scaling based on canvas height
+                // if (value > 0) {
+                //     console.log(`Frequency: ${frequencyIndex} Hz, Value: ${value} dB`);
+                // }
+                const barHeight = -value * 2; // Adjust to make the bars visible
+                //ctx.fillStyle = barColor;
+                //ctx.fillRect(i * barWidth, barHeight, barWidth, barHeight);
 
-                // Draw the bar at the calculated height
-                ctx.fillStyle = barColor;
-                ctx.fillRect(i * barWidth, ctx.canvas.height - barHeight, barWidth, barHeight); // Draw from the bottom up
+                const color = `rgb(${(barHeight / 100) * 255}, 0, 0, 1)`;
+                ctx.fillStyle = color;
+                ctx.fillRect(timeSlice, ctx.canvas.height - i, 1, 1);
             }
         };
-
-        // Call the rendering function every frame
         requestAnimationFrame(renderFreqData);
+        timeSlice += 1;
     }
 }
 
