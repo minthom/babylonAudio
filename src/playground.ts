@@ -29,6 +29,8 @@ document.addEventListener("DOMContentLoaded", () => {
 let timeSlice = 0;
 
 class Playground {
+    private static audioContext: AudioContext;
+
     public static CreateScene(engine: BABYLON.Engine, canvas: HTMLCanvasElement): BABYLON.Scene {
         // Create a basic Babylon Scene object (non-mesh)
         const scene = new BABYLON.Scene(engine);
@@ -39,16 +41,16 @@ class Playground {
 
         // Get the Babylon.js audio engine, audio context, and master gain node
         const audioEngine = BABYLON.Engine.audioEngine!;
-        const audioContext = audioEngine.audioContext!;
+        Playground.audioContext = audioEngine.audioContext!;
         const masterGainNode = audioEngine.masterGain;
 
         // Add test tones. Left speaker gets a 440 Hz sine wave, right speaker gets a 660 Hz sine wave
-        const leftSound = new OscillatorNode(audioContext, { frequency: 440 });
-        const rightSound = new OscillatorNode(audioContext, { frequency: 660 });
+        const leftSound = new OscillatorNode(Playground.audioContext, { frequency: 440 });
+        const rightSound = new OscillatorNode(Playground.audioContext, { frequency: 660 });
 
         // Add panner nodes to position the sound sources to the left and right
-        const leftPanner = new StereoPannerNode(audioContext, { pan: -1 });
-        const rightPanner = new StereoPannerNode(audioContext, { pan: 1 });
+        const leftPanner = new StereoPannerNode(Playground.audioContext, { pan: -1 });
+        const rightPanner = new StereoPannerNode(Playground.audioContext, { pan: 1 });
 
         // Connect the left and right sound sources to the panner nodes
         leftSound.connect(leftPanner);
@@ -67,15 +69,15 @@ class Playground {
 
         // Toggle the audio engine lock on user interaction
         document.addEventListener("click", () => {
-            if (audioContext.state === "suspended") {
-                audioContext.resume().then(() => console.log("Audio context resumed"));
-            } else if (audioContext.state === "running") {
-                audioContext.suspend().then(() => console.log("Audio context suspended"));
+            if (Playground.audioContext.state === "suspended") {
+                Playground.audioContext.resume().then(() => console.log("Audio context resumed"));
+            } else if (Playground.audioContext.state === "running") {
+                Playground.audioContext.suspend().then(() => console.log("Audio context suspended"));
             }
         });
 
         // Add analyzer node and connect it to the end of the audio graph
-        const analyzer = new AnalyserNode(audioContext);
+        const analyzer = new AnalyserNode(Playground.audioContext);
         masterGainNode.connect(analyzer);
 
         const freqData = new Float32Array(analyzer.frequencyBinCount);
@@ -86,7 +88,7 @@ class Playground {
         visualizationCanvas.height = canvas.height;
         visualizationCanvas.style.position = "absolute";
         visualizationCanvas.style.top = canvas.offsetTop + "px";
-        visualizationCanvas.style.left = canvas.offsetLeft + "px";
+        visualizationCanvas.style.left = "0px"; // Align to the very left of the screen
         document.body.appendChild(visualizationCanvas);
 
         const ctx = visualizationCanvas.getContext("2d");
@@ -99,19 +101,21 @@ class Playground {
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-        // Call the new visualization method with a delay (e.g., 5000 ms = 5 seconds)
-        Playground.visualizeFreqData(ctx, analyzer, freqData, {
-            min: -60, // Minimum dB threshold for visualization
-            range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
-            barColor: "rgb(100, 50, 150)", // Color for bars
-            backgroundColor: "#000", // Background color
-            timeout: 5000, // Delay visualization by 5 seconds
+        // Call the new visualization method in the render loop with parameters for flexibility
+        scene.onAfterRenderObservable.add(() => {
+            Playground.visualizeFreqData(ctx, analyzer, freqData, {
+                min: -60, // Minimum dB threshold for visualization
+                range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
+                barColor: "rgb(100, 50, 150)", // Color for bars
+                backgroundColor: "#000", // Background color
+                timeout: 5000,
+            });
         });
 
         return scene;
     }
 
-    // Updated method to visualize frequency data with parameters for customization, including timeout
+    // Updated method to visualize frequency data with parameters for customization
     public static visualizeFreqData(
         ctx: CanvasRenderingContext2D,
         analyzer: AnalyserNode,
@@ -126,57 +130,62 @@ class Playground {
     ): void {
         const { min, range, barColor, backgroundColor, timeout } = options;
 
-        // Delay the visualization by the specified timeout
-        setTimeout(() => {
-            console.log(`Visualization started after ${timeout / 1000} seconds`);
+        // Calculate the frequency bin range based on the sample rate and FFT size
+        const nyquistFreq = analyzer.context.sampleRate / 2;
+        let timeSlice = 0;
+        // Render loop to visualize frequency data
+        const renderFreqData = () => {
+            requestAnimationFrame(renderFreqData);
 
-            // Start rendering frequency data after the timeout
-            const nyquistFreq = analyzer.context.sampleRate / 2;
+            // Check the timeout condition without changing colors or visuals
+            const time = Playground.audioContext.currentTime * 1000;
+            if (time < timeout) {
+                // Keep timeSlice at 0 until timeout has elapsed
+                timeSlice = 0;
+                return;
+            }
 
-            // Render loop to visualize frequency data
-            const renderFreqData = () => {
-                // Get updated frequency data
-                analyzer.getFloatFrequencyData(freqData);
+            // Get updated frequency data
+            analyzer.getFloatFrequencyData(freqData);
 
-                // Clear the canvas before drawing
-                ctx.fillStyle = backgroundColor;
-                ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            for (let i = 0; i < freqData.length; i++) {
+                const frequencyIndex = (i / freqData.length) * nyquistFreq;
 
-                // Dynamically calculate the bar width based on canvas size and data length
-                const barWidth = ctx.canvas.width / freqData.length;
-
-                for (let i = 0; i < freqData.length; i++) {
-                    const frequencyIndex = (i / freqData.length) * nyquistFreq;
-
-                    // Only show frequencies within the specified range
-                    if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
-                        continue;
-                    }
-
-                    // Apply the minimum threshold to frequency data
-                    const value = freqData[i] < min ? 0 : freqData[i];
-
-                    // Calculate bar height (scale value for visualization)
-                    const barHeight = Math.max(0, -value * (ctx.canvas.height / 100)); // Scaling based on canvas height
-
-                    // Draw the bar at the calculated height
-                    ctx.fillStyle = barColor;
-                    ctx.fillRect(i * barWidth, ctx.canvas.height - barHeight, barWidth, barHeight); // Draw from the bottom up
+                // Only show frequencies within the specified range
+                if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
+                    //continue;
                 }
 
-                // Continue the animation
-                requestAnimationFrame(renderFreqData);
-            };
+                // Apply the minimum threshold to frequency data
+                const value = freqData[i]; // < min ? 0 : freqData[i];
 
-            // Call the rendering function every frame
-            requestAnimationFrame(renderFreqData);
-        }, timeout); // Timeout specified in milliseconds
+                // if (value > 0) {
+                //     console.log(`Frequency: ${frequencyIndex} Hz, Value: ${value} dB`);
+                // }
+                const barHeight = -value * 2; // Adjust to make the bars visible
+                //ctx.fillStyle = barColor;
+                //ctx.fillRect(i * barWidth, barHeight, barWidth, barHeight);
+
+                const color = `rgb(${(barHeight / 100) * 255}, 0, 0, 1)`;
+                ctx.fillStyle = color;
+                ctx.fillRect(timeSlice, ctx.canvas.height - i, 1, 1);
+            }
+
+            // Increment timeSlice to move visualization rightward after the timeout
+            timeSlice += 1;
+
+            // Reset timeSlice if it reaches the end of the canvas
+            if (timeSlice > ctx.canvas.width) {
+                timeSlice = 0;
+            }
+        };
+
+        // Start the render loop
+        requestAnimationFrame(renderFreqData);
     }
 }
-
 // Declaration for dat variable
 declare var dat: any;
 
 // Export the Playground class
 export { Playground };
-
