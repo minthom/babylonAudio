@@ -143,10 +143,22 @@ class Playground {
             // Get updated frequency data
             analyzer.getFloatFrequencyData(freqData);
 
+<<<<<<< Updated upstream
             // Calculate the frequency bin range based on the sample rate and FFT size
             const nyquistFreq = analyzer.context.sampleRate / 2;
 
             // const barWidth = ctx.canvas.width / freqData.length;
+=======
+            let far_end = 0;
+
+            // Find farthest empty value
+            for (let i = freqData.length - 1; i > 0; i--) {
+                if (freqData[i] != 0) {
+                    far_end = i + 1;
+                    break;
+                }
+            }
+>>>>>>> Stashed changes
 
             for (let i = 0; i < freqData.length; i++) {
                 const frequencyIndex = (i / freqData.length) * nyquistFreq;
@@ -159,13 +171,35 @@ class Playground {
                 // Apply the minimum threshold to frequency data
                 const value = freqData[i]; // < min ? 0 : freqData[i];
 
+<<<<<<< Updated upstream
                 const barHeight = Math.max(0, -value * (ctx.canvas.height / 100)); // Scaling based on canvas height
+=======
+                // if (value > 0) {
+                //     console.log(`Frequency: ${frequencyIndex} Hz, Value: ${value} dB`);
+                // }
+                const barHeight = -value; // Adjust to make the bars visible
+
+                const barWidth = ctx.canvas.width / (far_end - timeSlice);
+
+>>>>>>> Stashed changes
                 //ctx.fillStyle = barColor;
                 //ctx.fillRect(i * barWidth, barHeight, barWidth, barHeight);
 
                 const color = `rgb(${(barHeight / 100) * 255}, 0, 0, 1)`;
                 ctx.fillStyle = color;
+<<<<<<< Updated upstream
                 ctx.fillRect(timeSlice, ctx.canvas.height - i, 1, 1); // this is definitely why the bars are too tall, we aren't really using the barHeight variable
+=======
+                ctx.fillRect(timeSlice + i * barWidth, ctx.canvas.height - i, barWidth, barHeight);
+            }
+
+            // Increment timeSlice to move visualization rightward after the timeout
+            timeSlice += 1;
+
+            // Reset timeSlice if it reaches the end of the canvas
+            if (timeSlice > ctx.canvas.width) {
+                timeSlice = 0;
+>>>>>>> Stashed changes
             }
         };
 
