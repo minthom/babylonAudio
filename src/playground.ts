@@ -102,20 +102,21 @@ class Playground {
         ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         // Call the new visualization method in the render loop with parameters for flexibility
-        scene.onAfterRenderObservable.add(() => {
-            Playground.visualizeFreqData(ctx, analyzer, freqData, {
-                min: -60, // Minimum dB threshold for visualization
-                range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
-                barColor: "rgb(100, 50, 150)", // Color for bars
-                backgroundColor: "#000", // Background color
-                timeout: 5000,
-            });
+        //scene.onAfterRenderObservable.add(() => {
+        Playground.visualizeFreqData(ctx, analyzer, freqData, {
+            min: -60, // Minimum dB threshold for visualization
+            range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
+            barColor: "rgb(100, 50, 150)", // Color for bars
+            backgroundColor: "#000", // Background color
+            timeout: 5000,
+            startTime: 5, // Start time in seconds (adjust as needed)
+            endTime: 7, // End time in seconds (adjust as needed)
         });
+        //});
 
         return scene;
     }
 
-    // Updated method to visualize frequency data with parameters for customization
     public static visualizeFreqData(
         ctx: CanvasRenderingContext2D,
         analyzer: AnalyserNode,
@@ -125,25 +126,35 @@ class Playground {
             range: { minFreq: number; maxFreq: number };
             barColor: string;
             backgroundColor: string;
-            timeout: number; // Added timeout parameter
+            timeout: number;
+            startTime: number;
+            endTime: number;
         }
     ): void {
-        const { min, range, barColor, backgroundColor, timeout } = options;
-
-        // Calculate the frequency bin range based on the sample rate and FFT size
+        const { min, range, barColor, backgroundColor, timeout, startTime, endTime } = options;
         const nyquistFreq = analyzer.context.sampleRate / 2;
-        let timeSlice = 0;
-        // Render loop to visualize frequency data
+
         const renderFreqData = () => {
             requestAnimationFrame(renderFreqData);
 
-            // Check the timeout condition without changing colors or visuals
             const time = Playground.audioContext.currentTime * 1000;
             if (time < timeout) {
-                // Keep timeSlice at 0 until timeout has elapsed
-                timeSlice = 0;
                 return;
             }
+
+            // Ensure we only start visualizing at the specified startTime
+            if (time < startTime * 1000) {
+                return;
+            }
+
+            // Calculate the normalized time slice as a proportion of the time range
+            const duration = (endTime - startTime) * 1000; // in milliseconds
+            const elapsedTime = time - startTime * 1000;
+            const proportion = elapsedTime / duration;
+
+            // Set `timeSlice` based on canvas width and proportion of elapsed time
+            const maxTimeSlice = ctx.canvas.width;
+            timeSlice = Math.min(Math.floor(proportion * maxTimeSlice), maxTimeSlice);
 
             // Get updated frequency data
             analyzer.getFloatFrequencyData(freqData);
@@ -153,34 +164,17 @@ class Playground {
 
                 // Only show frequencies within the specified range
                 if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
-                    //continue;
+                    continue;
                 }
 
-                // Apply the minimum threshold to frequency data
-                const value = freqData[i]; // < min ? 0 : freqData[i];
-
-                // if (value > 0) {
-                //     console.log(`Frequency: ${frequencyIndex} Hz, Value: ${value} dB`);
-                // }
-                const barHeight = -value * 2; // Adjust to make the bars visible
-                //ctx.fillStyle = barColor;
-                //ctx.fillRect(i * barWidth, barHeight, barWidth, barHeight);
-
+                const value = freqData[i];
+                const barHeight = -value * 2;
                 const color = `rgb(${(barHeight / 100) * 255}, 0, 0, 1)`;
                 ctx.fillStyle = color;
                 ctx.fillRect(timeSlice, ctx.canvas.height - i, 1, 1);
             }
-
-            // Increment timeSlice to move visualization rightward after the timeout
-            timeSlice += 1;
-
-            // Reset timeSlice if it reaches the end of the canvas
-            if (timeSlice > ctx.canvas.width) {
-                timeSlice = 0;
-            }
         };
 
-        // Start the render loop
         requestAnimationFrame(renderFreqData);
     }
 }
