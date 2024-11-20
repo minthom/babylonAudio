@@ -1,4 +1,6 @@
 const SomeMagicNumber = 140;
+const minValue = -100; // Minimum dB threshold for frequency data
+const maxValue = 0; // Maximum dB threshold for frequency data
 
 document.addEventListener("DOMContentLoaded", () => {
     const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -44,43 +46,30 @@ class Playground {
         Playground.audioContext = audioEngine.audioContext!;
         const masterGainNode = audioEngine.masterGain;
 
-        // Add test tones. Left speaker gets a 440 Hz sine wave, right speaker gets a 660 Hz sine wave
-        const leftSound = new OscillatorNode(Playground.audioContext, { frequency: 440 });
-        const rightSound = new OscillatorNode(Playground.audioContext, { frequency: 660 });
-
-        // Add panner nodes to position the sound sources to the left and right
-        const leftPanner = new StereoPannerNode(Playground.audioContext, { pan: -1 });
-        const rightPanner = new StereoPannerNode(Playground.audioContext, { pan: 1 });
-
-        // Connect the left and right sound sources to the panner nodes
-        leftSound.connect(leftPanner);
-        rightSound.connect(rightPanner);
-
-        // Connect the panner nodes to the audio engine's master gain node
-        leftPanner.connect(masterGainNode);
-        rightPanner.connect(masterGainNode);
-
-        // Reduce the master gain volume
-        masterGainNode.gain.value = 0.1;
-
-        // Start the sound sources
-        leftSound.start();
-        rightSound.start();
-
-        // Toggle the audio engine lock on user interaction
-        document.addEventListener("click", () => {
-            if (Playground.audioContext.state === "suspended") {
-                Playground.audioContext.resume().then(() => console.log("Audio context resumed"));
-            } else if (Playground.audioContext.state === "running") {
-                Playground.audioContext.suspend().then(() => console.log("Audio context suspended"));
+        const whiteNoiseNode = Playground.audioContext.createScriptProcessor(4096, 1, 1);
+        whiteNoiseNode.onaudioprocess = (audioProcessingEvent) => {
+            const output = audioProcessingEvent.outputBuffer.getChannelData(0);
+            for (let i = 0; i < output.length; i++) {
+                output[i] = Math.random() * 2 - 1; // Generate white noise (-1 to 1)
             }
-        });
+        };
+
+        function playRandomFrequencies() {
+            const randomFrequency = Math.random() * 2000 + 200; // Random frequency between 200 Hz and 2200 Hz
+            const oscillator = new OscillatorNode(Playground.audioContext, { frequency: randomFrequency });
+            oscillator.connect(masterGainNode);
+            oscillator.start();
+            setTimeout(() => oscillator.stop(), 200); // Play for 200ms
+        }
+
+        // Call this function periodically to generate random tones
+        setInterval(playRandomFrequencies, 300); // Play a new tone every 300ms
 
         // Add analyzer node and connect it to the end of the audio graph
         const analyzer = new AnalyserNode(Playground.audioContext);
         masterGainNode.connect(analyzer);
 
-        const freqData = new Float32Array(analyzer.frequencyBinCount);
+        let freqData = new Float32Array(analyzer.frequencyBinCount);
 
         // Create a separate canvas for the audio visualization
         const visualizationCanvas = document.createElement("canvas");
@@ -98,19 +87,19 @@ class Playground {
         }
 
         // Clear the canvas before drawing
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        //ctx.fillStyle = "#000";
+        //ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         // Call the new visualization method in the render loop with parameters for flexibility
         //scene.onAfterRenderObservable.add(() => {
         Playground.visualizeFreqData(ctx, analyzer, freqData, {
-            min: -60, // Minimum dB threshold for visualization
+            minVolume: -60, // Minimum dB threshold for visualization
             range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
             barColor: "rgb(100, 50, 150)", // Color for bars
             backgroundColor: "#000", // Background color
             timeout: 5000,
-            startTime: 5, // Start time in seconds (adjust as needed)
-            endTime: 7, // End time in seconds (adjust as needed)
+            startTime: 2, // Start time in seconds (adjust as needed)
+            endTime: 10, // End time in seconds (adjust as needed)
         });
         //});
 
@@ -122,7 +111,7 @@ class Playground {
         analyzer: AnalyserNode,
         freqData: Float32Array,
         options: {
-            min: number;
+            minVolume: number;
             range: { minFreq: number; maxFreq: number };
             barColor: string;
             backgroundColor: string;
@@ -131,47 +120,70 @@ class Playground {
             endTime: number;
         }
     ): void {
-        const { min, range, barColor, backgroundColor, timeout, startTime, endTime } = options;
-        const nyquistFreq = analyzer.context.sampleRate / 2;
+        function decimalToHex(r, g, b) {
+            function componentToHex(c) {
+                let hex = c.toString(16);
+                return hex.length === 1 ? "0" + hex : hex;
+            }
 
+            return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+        }
+
+        const screenWidth = ctx.canvas.width;
+        const screenHeight = ctx.canvas.height;
+
+        // for (let x = 0; x < screenWidth; x++) {
+        //     for (let y = 0; y < screenHeight / 2; y++) {
+        //         ctx.fillRect(x, y, 1, 1);
+        //     }
+        // }
+
+        const volumeMax = 255;
+        const colorMax = 255;
+        const volumeToColorRatio = colorMax / volumeMax;
+
+        let x = 0;
+        let timeSlice = 0; // Tracks the current horizontal position for the visualization
+        let timeSliceAtStart = 0;
         const renderFreqData = () => {
+            if (Playground.audioContext.currentTime < options.startTime) {
+                // Do not start rendering until the specified startTime
+                return requestAnimationFrame(renderFreqData);
+            }
+
+            if (Playground.audioContext.currentTime > options.endTime) {
+                // Stop rendering once the endTime is reached
+                return;
+            }
+
             requestAnimationFrame(renderFreqData);
 
-            const time = Playground.audioContext.currentTime * 1000;
-            if (time < timeout) {
-                return;
-            }
+            // Calculate the current time slice as a percentage of the total time range
+            const progress = (Playground.audioContext.currentTime - options.startTime) / (options.endTime - options.startTime);
+            const timeSlice = Math.floor(progress * ctx.canvas.width);
 
-            // Ensure we only start visualizing at the specified startTime
-            if (time < startTime * 1000) {
-                return;
-            }
+            // Clear only the current vertical slice to avoid overwriting the entire canvas
+            ctx.clearRect(timeSlice, 0, 1, screenHeight);
 
-            // Calculate the normalized time slice as a proportion of the time range
-            const duration = (endTime - startTime) * 1000; // in milliseconds
-            const elapsedTime = time - startTime * 1000;
-            const proportion = elapsedTime / duration;
-
-            // Set `timeSlice` based on canvas width and proportion of elapsed time
-            const maxTimeSlice = ctx.canvas.width;
-            timeSlice = Math.min(Math.floor(proportion * maxTimeSlice), maxTimeSlice);
-
-            // Get updated frequency data
             analyzer.getFloatFrequencyData(freqData);
 
-            for (let i = 0; i < freqData.length; i++) {
-                const frequencyIndex = (i / freqData.length) * nyquistFreq;
-
-                // Only show frequencies within the specified range
-                if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
+            // Draw the frequency data as vertical bars
+            let freqDataIndex = 0;
+            for (let y = 0; y < freqData.length; y++) {
+                const volume = freqData[freqDataIndex]; // Negative value
+                if (volume < options.minVolume) {
+                    freqDataIndex++;
                     continue;
                 }
 
-                const value = freqData[i];
-                const barHeight = -value * 2;
-                const color = `rgb(${(barHeight / 100) * 255}, 0, 0, 1)`;
-                ctx.fillStyle = color;
-                ctx.fillRect(timeSlice, ctx.canvas.height - i, 1, 1);
+                // Calculate a color based on the volume
+                const color = Math.round((-volume / options.minVolume) * 255); // Normalize to 0-255
+                const colorString = decimalToHex(color, color, color);
+
+                ctx.fillStyle = colorString;
+                ctx.fillRect(timeSlice, Math.round(y), 1, 1);
+
+                freqDataIndex++;
             }
         };
 
