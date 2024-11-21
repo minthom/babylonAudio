@@ -46,28 +46,26 @@ class Playground {
         Playground.audioContext = audioEngine.audioContext!;
         const masterGainNode = audioEngine.masterGain;
 
-        // Add test tones. Left speaker gets a 440 Hz sine wave, right speaker gets a 660 Hz sine wave
-        const leftSound = new OscillatorNode(Playground.audioContext, { frequency: 440 });
-        const rightSound = new OscillatorNode(Playground.audioContext, { frequency: 660 });
+        const whiteNoiseNode = Playground.audioContext.createScriptProcessor(4096, 1, 1);
+        whiteNoiseNode.onaudioprocess = (audioProcessingEvent) => {
+            const output = audioProcessingEvent.outputBuffer.getChannelData(0);
+            for (let i = 0; i < output.length; i++) {
+                output[i] = Math.random() * 2 - 1; // Generate white noise (-1 to 1)
+            }
+        };
 
-        // Add panner nodes to position the sound sources to the left and right
-        const leftPanner = new StereoPannerNode(Playground.audioContext, { pan: -1 });
-        const rightPanner = new StereoPannerNode(Playground.audioContext, { pan: 1 });
+        function playRandomFrequencies() {
+            const randomFrequency = Math.random() * 2000 + 20; // Random frequency between 20 Hz and 2200 Hz
+            const oscillator = new OscillatorNode(Playground.audioContext, { frequency: randomFrequency });
+            oscillator.connect(masterGainNode);
+            oscillator.start();
+            setTimeout(() => oscillator.stop(), 200); // Play for 200ms
+        }
 
-        // Connect the left and right sound sources to the panner nodes
-        leftSound.connect(leftPanner);
-        rightSound.connect(rightPanner);
+        // Call this function periodically to generate random tones
+        setInterval(playRandomFrequencies, 300); // Play a new tone every 300ms
 
-        // Connect the panner nodes to the audio engine's master gain node
-        leftPanner.connect(masterGainNode);
-        rightPanner.connect(masterGainNode);
-
-        // Reduce the master gain volume
         masterGainNode.gain.value = 0.1;
-
-        // Start the sound sources
-        leftSound.start();
-        rightSound.start();
 
         // Toggle the audio engine lock on user interaction
         document.addEventListener("click", () => {
@@ -82,7 +80,7 @@ class Playground {
         const analyzer = new AnalyserNode(Playground.audioContext);
         masterGainNode.connect(analyzer);
 
-        const freqData = new Float32Array(analyzer.frequencyBinCount);
+        let freqData = new Float32Array(analyzer.frequencyBinCount);
 
         // Create a separate canvas for the audio visualization
         const visualizationCanvas = document.createElement("canvas");
@@ -100,19 +98,19 @@ class Playground {
         }
 
         // Clear the canvas before drawing
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        //ctx.fillStyle = "#000";
+        //ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         // Call the new visualization method in the render loop with parameters for flexibility
         //scene.onAfterRenderObservable.add(() => {
         Playground.visualizeFreqData(ctx, analyzer, freqData, {
-            min: -60, // Minimum dB threshold for visualization
-            range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
+            minVolume: -100, // Minimum dB threshold for visualization
+            range: { min: 0, max: 0.5 }, // Frequency range to visualize
             barColor: "rgb(100, 50, 150)", // Color for bars
             backgroundColor: "#000", // Background color
             timeout: 5000,
-            startTime: 5, // Start time in seconds (adjust as needed)
-            endTime: 7, // End time in seconds (adjust as needed)
+            startTime: 2, // Start time in seconds (adjust as needed)
+            endTime: 10, // End time in seconds (adjust as needed)
         });
         //});
 
@@ -124,8 +122,8 @@ class Playground {
         analyzer: AnalyserNode,
         freqData: Float32Array,
         options: {
-            min: number;
-            range: { minFreq: number; maxFreq: number };
+            minVolume: number;
+            range: { min: number; max: number };
             barColor: string;
             backgroundColor: string;
             timeout: number;
@@ -133,48 +131,102 @@ class Playground {
             endTime: number;
         }
     ): void {
-        const { min, range, barColor, backgroundColor, timeout, startTime, endTime } = options;
-        const nyquistFreq = analyzer.context.sampleRate / 2;
+        function decimalToHex(r, g, b) {
+            function componentToHex(c) {
+                let hex = c.toString(16);
+                return hex.length === 1 ? "0" + hex : hex;
+            }
 
+            return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+        }
+
+        const screenWidth = ctx.canvas.width;
+        const screenHeight = ctx.canvas.height;
+
+        // for (let x = 0; x < screenWidth; x++) {
+        //     for (let y = 0; y < screenHeight / 2; y++) {
+        //         ctx.fillRect(x, y, 1, 1);
+        //     }
+        // }
+
+        const volumeMax = 255;
+        const colorMax = 255;
+        const volumeToColorRatio = colorMax / volumeMax;
+
+        let x = 0;
+        let timeSlice = 0; // Tracks the current horizontal position for the visualization
+        let timeSliceAtStart = 0; // Tracks the timeSlice when the startTime is met, to draw from the left edge of screen
+        let endFlag = true; // Tracks if the endTime has been met so that no more changes occur to the canvas
         const renderFreqData = () => {
-            requestAnimationFrame(renderFreqData);
-
-            const time = Playground.audioContext.currentTime * 1000;
-            if (time < timeout || time < startTime * 1000) {
+            if (timeSlice >= ctx.canvas.width) {
+                // Don't go through the rest of the function as the screen has been filled
                 return;
             }
 
-            const duration = (endTime - startTime) * 1000;
-            const elapsedTime = time - startTime * 1000;
-            const proportion = elapsedTime / duration;
-
-            const maxTimeSlice = ctx.canvas.width;
-            const timeSlice = Math.min(Math.floor(proportion * maxTimeSlice), maxTimeSlice);
+            requestAnimationFrame(renderFreqData);
+            let yRatio = screenHeight / freqData.length;
 
             analyzer.getFloatFrequencyData(freqData);
 
-            const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-            gradient.addColorStop(0, barColor);
-            gradient.addColorStop(1, "yellow");
+            if (endFlag) {
+                ctx.clearRect(timeSlice, 0, 1, screenHeight); // Clear the current column before drawing
+            }
 
-            for (let i = 0; i < freqData.length; i++) {
-                const frequencyIndex = (i / freqData.length) * nyquistFreq;
+            let freqDataIndex = 0;
 
-                if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
-                    continue;
+            for (let y = 0; y < freqData.length; y += yRatio) {
+                // Break if the startTime hasn't been met yet
+                if (Playground.audioContext.currentTime < options.startTime) {
+                    break;
+                } else if (timeSlice > ctx.canvas.width) {
+                    break;
                 }
 
-                const value = freqData[i];
-                const normalizedValue = (value - minValue) / (maxValue - minValue);
-                const barHeight = Math.max(-value * 2, 0);
+                // Break when the endTime is met, set flag to false to make sure it doesn't run again, crop, scale, and display image
+                else if (Playground.audioContext.currentTime > options.endTime && endFlag) {
+                    let myData = ctx.canvas.toDataURL();
+                    const image = new Image();
 
-                const yPosition = ctx.canvas.height - barHeight;
+                    // when the image fully loads, perform a crop and scale the cropped image to fit the screen
+                    image.onload = () => {
+                        const cropX = 0; // starting X for crop
+                        const cropY = Math.round(options.range.min * ctx.canvas.height); // starting Y for crop, assumes that you may want to crop lower in image
+                        const cropHeight = Math.round(options.range.max * ctx.canvas.height) - cropY; // height of crop in px
+                        const cropWidth = timeSlice - timeSliceAtStart; // width of crop in px
 
-                ctx.fillStyle = gradient;
-                ctx.fillRect(timeSlice, yPosition, 1, barHeight);
+                        // draws cropped image of the visualization and scales it to the canvas height and width
+                        ctx.drawImage(image, cropX, cropY, cropWidth, cropHeight, 0, 0, ctx.canvas.width, ctx.canvas.height);
+                        endFlag = false;
+                    };
+                    image.src = myData;
+                    break;
+                }
+
+                // endTime is met don't draw any more rectangles
+                else if (endFlag == false) {
+                    break;
+                }
+
+                // Takes the currentTimeSlice as soon as the startTime is met to make sure the visualization always starts from the left side of the screen
+                else if (timeSliceAtStart == 0 && options.startTime != 0) {
+                    timeSliceAtStart = timeSlice;
+                }
+
+                let volume = freqData[freqDataIndex]; // This will be a negative value
+
+                let color = Math.round(-volume * volumeToColorRatio); // Convert to positive to make sure we get a value between 0 and 255
+
+                if (volume < options.minVolume) {
+                    color = 255;
+                }
+                let colorString = decimalToHex(color, color, color);
+
+                ctx.fillStyle = colorString;
+                ctx.fillRect(timeSlice - timeSliceAtStart, Math.round(y), 1, 1);
+                freqDataIndex++;
             }
+            timeSlice++;
         };
-
         requestAnimationFrame(renderFreqData);
     }
 }
