@@ -2,31 +2,31 @@ const SomeMagicNumber = 140;
 const minValue = -100; // Minimum dB threshold for frequency data
 const maxValue = 0; // Maximum dB threshold for frequency data
 
-document.addEventListener("DOMContentLoaded", () => {
-    const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
+// document.addEventListener("DOMContentLoaded", () => {
+//     const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 
-    // Check if the canvas element is found
-    if (!canvas) {
-        console.error("Canvas element not found!");
-        return; // Exit if canvas is not found
-    }
+//     // Check if the canvas element is found
+//     if (!canvas) {
+//         console.error("Canvas element not found!");
+//         return; // Exit if canvas is not found
+//     }
 
-    // Initialize the Babylon.js engine with the canvas
-    const engine = new BABYLON.Engine(canvas, true);
+//     // Initialize the Babylon.js engine with the canvas
+//     const engine = new BABYLON.Engine(canvas, true);
 
-    // Call the CreateScene method to set up the scene and start rendering
-    const scene = Playground.CreateScene(engine, canvas);
+//     // Call the CreateScene method to set up the scene and start rendering
+//     const scene = Playground.CreateScene(engine, canvas);
 
-    // Register a render loop to repeatedly render the scene
-    engine.runRenderLoop(() => {
-        scene.render();
-    });
+//     // Register a render loop to repeatedly render the scene
+//     engine.runRenderLoop(() => {
+//         scene.render();
+//     });
 
-    // Watch for browser/canvas resize events
-    window.addEventListener("resize", () => {
-        engine.resize();
-    });
-});
+//     // Watch for browser/canvas resize events
+//     window.addEventListener("resize", () => {
+//         engine.resize();
+//     });
+// });
 
 let timeSlice = 0;
 
@@ -46,20 +46,26 @@ class Playground {
         Playground.audioContext = audioEngine.audioContext!;
         const masterGainNode = audioEngine.masterGain;
 
-        const whiteNoiseNode = Playground.audioContext.createScriptProcessor(4096, 1, 1);
-        whiteNoiseNode.onaudioprocess = (audioProcessingEvent) => {
-            const output = audioProcessingEvent.outputBuffer.getChannelData(0);
-            for (let i = 0; i < output.length; i++) {
-                output[i] = Math.random() * 2 - 1; // Generate white noise (-1 to 1)
-            }
-        };
+        // const whiteNoiseNode = Playground.audioContext.createScriptProcessor(4096, 1, 1);
+        // whiteNoiseNode.onaudioprocess = (audioProcessingEvent) => {
+        //     const output = audioProcessingEvent.outputBuffer.getChannelData(0);
+        //     for (let i = 0; i < output.length; i++) {
+        //         output[i] = Math.random() * 2 - 1; // Generate white noise (-1 to 1)
+        //     }
+        // };
 
+        let freqIndex = 0;
         function playRandomFrequencies() {
-            const randomFrequency = Math.random() * 2000 + 20; // Random frequency between 20 Hz and 2200 Hz
-            const oscillator = new OscillatorNode(Playground.audioContext, { frequency: randomFrequency });
+            const frequencySequence = [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000];
+            const oscillator = new OscillatorNode(Playground.audioContext, { frequency: frequencySequence[freqIndex] });
             oscillator.connect(masterGainNode);
             oscillator.start();
             setTimeout(() => oscillator.stop(), 200); // Play for 200ms
+            if (freqIndex < frequencySequence.length) {
+                freqIndex++;
+            } else {
+                freqIndex = 0;
+            }
         }
 
         // Call this function periodically to generate random tones
@@ -104,8 +110,8 @@ class Playground {
         // Call the new visualization method in the render loop with parameters for flexibility
         //scene.onAfterRenderObservable.add(() => {
         Playground.visualizeFreqData(ctx, analyzer, freqData, {
-            minVolume: -100, // Minimum dB threshold for visualization
-            range: { min: 0, max: 0.5 }, // Frequency range to visualize
+            minVolume: -200, // Minimum dB threshold for visualization
+            range: { min: 0, max: 0.125 }, // Frequency range to visualize
             barColor: "rgb(100, 50, 150)", // Color for bars
             backgroundColor: "#000", // Background color
             timeout: 5000,
@@ -165,6 +171,9 @@ class Playground {
 
             requestAnimationFrame(renderFreqData);
             let yRatio = screenHeight / freqData.length;
+            if (yRatio > 1) {
+                yRatio = 1;
+            }
 
             analyzer.getFloatFrequencyData(freqData);
 
@@ -173,8 +182,9 @@ class Playground {
             }
 
             let freqDataIndex = 0;
+            let freqUpperBound = Math.round(freqData.length * yRatio);
 
-            for (let y = 0; y < freqData.length; y += yRatio) {
+            for (let y = 0; y < freqUpperBound; y += yRatio) {
                 // Break if the startTime hasn't been met yet
                 if (Playground.audioContext.currentTime < options.startTime) {
                     break;
