@@ -2,34 +2,6 @@ const SomeMagicNumber = 140;
 const minValue = -100; // Minimum dB threshold for frequency data
 const maxValue = 0; // Maximum dB threshold for frequency data
 
-// document.addEventListener("DOMContentLoaded", () => {
-//     const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
-
-//     // Check if the canvas element is found
-//     if (!canvas) {
-//         console.error("Canvas element not found!");
-//         return; // Exit if canvas is not found
-//     }
-
-//     // Initialize the Babylon.js engine with the canvas
-//     const engine = new BABYLON.Engine(canvas, true);
-
-//     // Call the CreateScene method to set up the scene and start rendering
-//     const scene = Playground.CreateScene(engine, canvas);
-
-//     // Register a render loop to repeatedly render the scene
-//     engine.runRenderLoop(() => {
-//         scene.render();
-//     });
-
-//     // Watch for browser/canvas resize events
-//     window.addEventListener("resize", () => {
-//         engine.resize();
-//     });
-// });
-
-let timeSlice = 0;
-
 class Playground {
     private static audioContext: AudioContext;
 
@@ -46,16 +18,9 @@ class Playground {
         Playground.audioContext = audioEngine.audioContext!;
         const masterGainNode = audioEngine.masterGain;
 
-        // const whiteNoiseNode = Playground.audioContext.createScriptProcessor(4096, 1, 1);
-        // whiteNoiseNode.onaudioprocess = (audioProcessingEvent) => {
-        //     const output = audioProcessingEvent.outputBuffer.getChannelData(0);
-        //     for (let i = 0; i < output.length; i++) {
-        //         output[i] = Math.random() * 2 - 1; // Generate white noise (-1 to 1)
-        //     }
-        // };
-
         let freqIndex = 0;
         function playRandomFrequencies() {
+            // Generates a sequence of fixed frequencies from `frequencySequence` for repeatable and testable tones
             const frequencySequence = [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000];
             const oscillator = new OscillatorNode(Playground.audioContext, { frequency: frequencySequence[freqIndex] });
             oscillator.connect(masterGainNode);
@@ -148,13 +113,6 @@ class Playground {
 
         const screenWidth = ctx.canvas.width;
         const screenHeight = ctx.canvas.height;
-
-        // for (let x = 0; x < screenWidth; x++) {
-        //     for (let y = 0; y < screenHeight / 2; y++) {
-        //         ctx.fillRect(x, y, 1, 1);
-        //     }
-        // }
-
         const volumeMax = 255;
         const colorMax = 255;
         const volumeToColorRatio = colorMax / volumeMax;
@@ -199,8 +157,8 @@ class Playground {
 
                     // when the image fully loads, perform a crop and scale the cropped image to fit the screen
                     image.onload = () => {
-                        const cropX = 0; // starting X for crop
-                        const cropY = Math.round(options.range.min * ctx.canvas.height); // starting Y for crop, assumes that you may want to crop lower in image
+                        const cropX = 0; // Start at the left edge of the image
+                        const cropY = Math.round(options.range.min * ctx.canvas.height); // starting Y for crop, assumes that you may want to crop lower frequencies in image
                         const cropHeight = Math.round(options.range.max * ctx.canvas.height) - cropY; // height of crop in px
                         const cropWidth = timeSlice - timeSliceAtStart; // width of crop in px
 
