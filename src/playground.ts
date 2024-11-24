@@ -46,15 +46,6 @@ class Playground {
         Playground.audioContext = audioEngine.audioContext!;
         const masterGainNode = audioEngine.masterGain;
 
-<<<<<<< HEAD
-        // Add test tones. Left speaker gets a 440 Hz sine wave, right speaker gets a 660 Hz sine wave
-        const leftSound = new OscillatorNode(Playground.audioContext, { frequency: 440 });
-        const rightSound = new OscillatorNode(Playground.audioContext, { frequency: 660 });
-
-        // Add panner nodes to position the sound sources to the left and right
-        const leftPanner = new StereoPannerNode(Playground.audioContext, { pan: -1 });
-        const rightPanner = new StereoPannerNode(Playground.audioContext, { pan: 1 });
-=======
         // const whiteNoiseNode = Playground.audioContext.createScriptProcessor(4096, 1, 1);
         // whiteNoiseNode.onaudioprocess = (audioProcessingEvent) => {
         //     const output = audioProcessingEvent.outputBuffer.getChannelData(0);
@@ -76,7 +67,6 @@ class Playground {
                 freqIndex = 0;
             }
         }
->>>>>>> origin/241122-adjust-vertical-scaling
 
         // Call this function periodically to generate random tones
         setInterval(playRandomFrequencies, 300); // Play a new tone every 300ms
@@ -118,16 +108,6 @@ class Playground {
         //ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         // Call the new visualization method in the render loop with parameters for flexibility
-<<<<<<< HEAD
-        scene.onAfterRenderObservable.add(() => {
-            Playground.visualizeFreqData(ctx, analyzer, freqData, {
-                min: -60, // Minimum dB threshold for visualization
-                range: { minFreq: 1, maxFreq: 24000 }, // Frequency range to visualize
-                barColor: "rgb(100, 50, 150)", // Color for bars
-                backgroundColor: "#000", // Background color
-                timeout: 5000,
-            });
-=======
         //scene.onAfterRenderObservable.add(() => {
         Playground.visualizeFreqData(ctx, analyzer, freqData, {
             minVolume: -200, // Minimum dB threshold for visualization
@@ -137,17 +117,12 @@ class Playground {
             timeout: 5000,
             startTime: 2, // Start time in seconds (adjust as needed)
             endTime: 10, // End time in seconds (adjust as needed)
->>>>>>> origin/241122-adjust-vertical-scaling
         });
         //});
 
         return scene;
     }
 
-<<<<<<< HEAD
-    // Updated method to visualize frequency data with parameters for customization
-=======
->>>>>>> origin/241122-adjust-vertical-scaling
     public static visualizeFreqData(
         ctx: CanvasRenderingContext2D,
         analyzer: AnalyserNode,
@@ -168,59 +143,6 @@ class Playground {
                 return hex.length === 1 ? "0" + hex : hex;
             }
 
-<<<<<<< HEAD
-        // Calculate the frequency bin range based on the sample rate and FFT size
-        const nyquistFreq = analyzer.context.sampleRate / 2;
-        let timeSlice = 0;
-        // Render loop to visualize frequency data
-        const renderFreqData = () => {
-            requestAnimationFrame(renderFreqData);
-
-            // Check the timeout condition without changing colors or visuals
-            const time = Playground.audioContext.currentTime * 1000;
-            if (time < timeout) {
-                // Keep timeSlice at 0 until timeout has elapsed
-                timeSlice = 0;
-                return;
-            }
-
-            // Get updated frequency data
-            analyzer.getFloatFrequencyData(freqData);
-
-            for (let i = 0; i < freqData.length; i++) {
-                const frequencyIndex = (i / freqData.length) * nyquistFreq;
-
-                // Only show frequencies within the specified range
-                if (frequencyIndex < range.minFreq || frequencyIndex > range.maxFreq) {
-                    //continue;
-                }
-
-                // Apply the minimum threshold to frequency data
-                const value = freqData[i]; // < min ? 0 : freqData[i];
-
-                // if (value > 0) {
-                //     console.log(`Frequency: ${frequencyIndex} Hz, Value: ${value} dB`);
-                // }
-                const barHeight = -value * 2; // Adjust to make the bars visible
-                //ctx.fillStyle = barColor;
-                //ctx.fillRect(i * barWidth, barHeight, barWidth, barHeight);
-
-                const color = `rgb(${(barHeight / 100) * 255}, 0, 0, 1)`;
-                ctx.fillStyle = color;
-                ctx.fillRect(timeSlice, ctx.canvas.height - i, 1, 1);
-            }
-
-            // Increment timeSlice to move visualization rightward after the timeout
-            timeSlice += 1;
-
-            // Reset timeSlice if it reaches the end of the canvas
-            if (timeSlice > ctx.canvas.width) {
-                timeSlice = 0;
-            }
-        };
-
-        // Start the render loop
-=======
             return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
         }
 
@@ -315,7 +237,6 @@ class Playground {
             }
             timeSlice++;
         };
->>>>>>> origin/241122-adjust-vertical-scaling
         requestAnimationFrame(renderFreqData);
     }
 }
